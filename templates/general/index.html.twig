@@ -1,0 +1,90 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    <style>
+        #interactive>video {
+            width: 100%;
+        }
+
+        #interactive>canvas.drawing,
+        canvas.drawingBuffer {
+            display: none;
+        }
+    </style>
+
+    <h1>Escanear Código de Barras EAN-13</h1>
+    <div id="interactive"></div>
+    <ul id="barcodeList"></ul>
+
+    <script>
+        let lastDetectedCode = null;
+        let lastDetectedTime = 0;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#interactive'),
+                    constraints: {
+                        width: 1280,
+                        height: 960,
+                        facingMode: "environment" // Cámara trasera
+                    },
+                    singleChannel: false, // Usa color en lugar de escala de grises para mejorar la precisión
+                    locator: {
+                        halfSample: false, // No hacer muestreo a la mitad para mejorar la calidad
+                        patchSize: "large", // Aumenta el tamaño del parche para mejorar la precisión (puedes probar "x-large")
+                        debug: {
+                            showCanvas: true, // Muestra el canvas de procesamiento
+                            showPatches: true,
+                            showFoundPatches: true,
+                            showSkeleton: true,
+                            showLabels: true,
+                            showPatchLabels: true,
+                            showRemainingPatchLabels: true,
+                            boxFromPatches: {
+                                showTransformed: true,
+                                showTransformedBox: true,
+                                showBB: true
+                            }
+                        }
+                    },
+                    multiplier: 2.0 // Aumenta la resolución de la imagen antes del procesamiento
+                },
+                decoder: {
+                    readers: ["ean_reader"], // Solo se incluye el lector EAN
+                    multiple: false, // Evita la detección múltiple para centrarse en un solo código
+                },
+                locate: true, // Intenta localizar el código de barras en toda la imagen
+            }, function (err) {
+                if (err) {
+                    console.log(err);
+                    return;
+                }
+                console.log("Initialization finished. Ready to start");
+                Quagga.start();
+            });
+
+            Quagga.onDetected(function (result) {
+                const currentTime = new Date().getTime();
+                const code = result.codeResult.code;
+
+                // Verificar que el código tenga 13 dígitos y evitar lecturas repetidas en menos de 5 segundos
+                if (code.length === 13 && (code !== lastDetectedCode || currentTime - lastDetectedTime > 5000)) {
+                    lastDetectedCode = code;
+                    lastDetectedTime = currentTime;
+
+                    // Reproducir sonido
+                    const audio = new Audio('{{ asset('sounds/beep.mp3') }}');
+                    audio.play();
+
+                    // Añadir el código de barras a la lista
+                    const listItem = document.createElement('li');
+                    listItem.textContent = code;
+                    document.getElementById('barcodeList').appendChild(listItem);
+                }
+            });
+        });
+    </script>
+{% endblock %}
